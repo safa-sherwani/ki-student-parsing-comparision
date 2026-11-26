@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KIS · Page comparison</title>
+  <link rel="canonical" href="./docs/">
+</head>
+<body>
+  <a id="comparison" href="./docs/">Open the KIS page comparison</a>
+  <script>
+    const app = new URL(document.getElementById('comparison').href);
+    app.search = window.location.search;
+    app.hash = window.location.hash;
+    window.location.replace(app.href);
+  </script>
+</body>
+</html>
