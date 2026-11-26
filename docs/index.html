@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="Browse Grade 12 textbook scans and compare two Gemini page-parsing runs.">
+  <title>KIS · Page comparison</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#workspace">Skip to comparison</a>
+  <header class="masthead">
+    <div class="shell masthead-inner">
+      <div class="brand"><strong>KIS</strong><span>Textbook parsing</span></div>
+      <label class="theme">
+        <span class="sr-only">Color theme</span>
+        <select id="theme"><option value="system">System theme</option><option value="light">Light theme</option><option value="dark">Dark theme</option></select>
+      </label>
+    </div>
+  </header>
+  <main class="shell">
+    <section class="intro" aria-labelledby="title">
+      <div>
+        <p class="eyebrow">Grade 12 textbooks</p>
+        <h1 id="title">Page comparison<span>.</span></h1>
+        <p class="lede">Read the original page alongside both Gemini outputs.</p>
+      </div>
+      <dl class="overview">
+        <div><dt>Textbook pages</dt><dd id="total">—</dd></div>
+        <div><dt>Complete comparisons</dt><dd id="paired">—</dd></div>
+      </dl>
+    </section>
+
+    <section id="workspace" aria-labelledby="page-title">
+      <div class="toolbar">
+        <div class="fields">
+          <label for="book">Textbook<select id="book" disabled></select></label>
+          <label for="filter">Show<select id="filter" disabled><option value="all">All pages</option><option value="sampled">Test results</option></select></label>
+          <label for="page">PDF page<select id="page" disabled></select></label>
+        </div>
+        <div class="pagination" aria-label="Page navigation">
+          <button id="prev" type="button" aria-label="Previous page" disabled><span aria-hidden="true">‹</span></button>
+          <button id="next" type="button" aria-label="Next page" disabled><span aria-hidden="true">›</span></button>
+        </div>
+      </div>
+      <p id="error" role="alert" hidden></p>
+      <div class="page-heading">
+        <div>
+          <h2 id="page-title">Loading comparison…</h2>
+          <p id="page-label" aria-live="polite"></p>
+        </div>
+        <label class="diff-switch"><input id="diff" type="checkbox" disabled> Highlight differences</label>
+      </div>
+
+      <div class="phone-controls" role="group" aria-label="Visible panels">
+        <button type="button" data-view="scan" aria-pressed="true">Original</button>
+        <button type="button" data-view="models" aria-pressed="false">Both outputs</button>
+        <button type="button" data-view="left" aria-pressed="false">3.1 v2</button>
+        <button type="button" data-view="right" aria-pressed="false">3.8</button>
+      </div>
+      <div class="panels" id="panels" data-view="scan">
+        <article class="panel scan-panel" aria-labelledby="source-title">
+          <header><div><p class="panel-label">Source</p><h3 id="source-title">Original page</h3></div><button type="button" id="zoom" disabled>Enlarge</button></header>
+          <div class="well scan-well" id="scan-well" tabindex="0" role="region" aria-label="Textbook scan">
+            <p id="scan-status" class="empty" role="status">Loading page…</p>
+            <img id="scan" alt="" hidden>
+          </div>
+        </article>
+        <article class="panel left-panel" aria-labelledby="left-title">
+          <header><div><p class="panel-label">Gemini</p><h3 id="left-title">3.1 Flash Lite v2</h3></div></header>
+          <div class="well output" id="left" tabindex="0" role="region" aria-label="Gemini 3.1 Flash Lite v2 output"></div>
+        </article>
+        <article class="panel right-panel" aria-labelledby="right-title">
+          <header><div><p class="panel-label">Gemini</p><h3 id="right-title">3.8 Flash</h3></div></header>
+          <div class="well output" id="right" tabindex="0" role="region" aria-label="Gemini 3.8 Flash output"></div>
+        </article>
+      </div>
+    </section>
+  </main>
+  <dialog aria-labelledby="enlarged-title" id="enlarged">
+    <div class="dialog-header"><h2 id="enlarged-title">Original page</h2><div class="dialog-controls"><button type="button" id="magnify" aria-pressed="false">Zoom in</button><form method="dialog"><button type="submit" autofocus>Close</button></form></div></div>
+    <div class="dialog-image"><img id="large-scan" alt=""></div>
+  </dialog>
+</body>
+</html>
