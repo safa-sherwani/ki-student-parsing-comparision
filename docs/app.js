@@ -2,7 +2,7 @@
 
 const byId = id => document.getElementById(id);
 const ui = Object.fromEntries([
-  'book', 'filter', 'page', 'prev', 'next', 'total', 'paired', 'page-title',
+  'book', 'page', 'prev', 'next', 'total', 'paired', 'page-title',
   'page-label', 'scan', 'scan-status', 'scan-well', 'zoom', 'left', 'right',
   'panels', 'theme', 'diff', 'error', 'enlarged', 'large-scan', 'enlarged-title', 'magnify',
 ].map(id => [id, byId(id)]));
@@ -18,30 +18,35 @@ const colorScheme = matchMedia('(prefers-color-scheme: light)');
 let books = [];
 let available = [];
 let renderVersion = 0;
-let scanUrl;
-let activePack;
+const themeButtons = ui.theme.querySelectorAll('button');
+let themeChoice = 'system';
 
 function applyTheme() {
-  const choice = ui.theme.value;
   document.documentElement.dataset.theme =
-    choice === 'system' ? (colorScheme.matches ? 'light' : 'dark') : choice;
+    themeChoice === 'system' ? (colorScheme.matches ? 'light' : 'dark') : themeChoice;
+  for (const button of themeButtons) {
+    button.setAttribute('aria-pressed', String(button.dataset.themeChoice === themeChoice));
+  }
 }
 
 try {
   const saved = localStorage.getItem('kis-theme');
-  if (['light', 'dark', 'system'].includes(saved)) ui.theme.value = saved;
+  if (['light', 'dark', 'system'].includes(saved)) themeChoice = saved;
 } catch { /* Browsing with storage disabled still supports switching themes. */ }
 applyTheme();
 colorScheme.addEventListener('change', applyTheme);
-ui.theme.addEventListener('change', () => {
-  applyTheme();
-  try { localStorage.setItem('kis-theme', ui.theme.value); } catch {}
-});
+for (const button of themeButtons) {
+  button.addEventListener('click', () => {
+    themeChoice = button.dataset.themeChoice;
+    applyTheme();
+    try { localStorage.setItem('kis-theme', themeChoice); } catch {}
+  });
+}
 
-async function load(path, format) {
+async function loadJSON(path) {
   const response = await fetch(path);
   if (!response.ok) throw new Error(`Could not open ${path}`);
-  return response[format]();
+  return response.json();
 }
 
 function status(node, message) {
@@ -72,24 +77,11 @@ function displayOutput(node, output, language) {
   }));
 }
 
-function scanPack(id, pack) {
-  const path = `data/${id}-${pack}.bin`;
-  if (activePack?.path !== path) {
-    const request = load(path, 'arrayBuffer').catch(error => {
-      if (activePack?.path === path) activePack = undefined;
-      throw error;
-    });
-    activePack = { path, request };
-  }
-  return activePack.request;
-}
-
 function linkToPage(book, page, replace) {
   const url = new URL(location.href);
   url.searchParams.set('book', book);
   url.searchParams.set('page', page);
-  if (ui.filter.value === 'sampled') url.searchParams.set('show', 'results');
-  else url.searchParams.delete('show');
+  url.searchParams.delete('show');
   if (url.href !== location.href) history[replace ? 'replaceState' : 'pushState'](null, '', url);
 }
 
@@ -103,9 +95,9 @@ async function render({ link = true, replace = false } = {}) {
   const scanLabel = `${name}, PDF page ${page.page}`;
   if (link) linkToPage(book.id, page.page, replace);
   ui['page-title'].textContent = `${name} · Page ${page.page}`;
-  const details = [`PDF page ${page.page} of ${book.pages.length}`];
+  const details = [`Sample ${ui.page.selectedIndex + 1} of ${available.length}`];
   if (page.printed) details.push(`Printed page ${page.printed}`);
-  details.push(['Scan only', 'One model output', 'Both model outputs'][page.outputs ?? 0]);
+  details.push(['No extracted text', 'One model output', 'Both model outputs'][page.outputs ?? 0]);
   ui['page-label'].textContent = details.join(' · ');
   ui.prev.disabled = ui.page.selectedIndex === 0;
   ui.next.disabled = ui.page.selectedIndex === available.length - 1;
@@ -114,7 +106,6 @@ async function render({ link = true, replace = false } = {}) {
   ui.zoom.disabled = true;
   ui.scan.hidden = true;
   ui.scan.removeAttribute('src');
-  if (scanUrl) { URL.revokeObjectURL(scanUrl); scanUrl = undefined; }
   if (ui.enlarged.open) ui.enlarged.close();
   ui['scan-well'].scrollTop = 0;
   ui['scan-status'].hidden = false;
@@ -122,16 +113,13 @@ async function render({ link = true, replace = false } = {}) {
   const outputs = [ui.left, ui.right];
   for (const output of outputs) {
     output.scrollTop = 0;
-    status(output, page.sampled ? 'Loading output…' : 'This page was outside the model test sample.');
+    status(output, 'Loading output…');
   }
 
-  const [pack, start, length] = page.scan;
-  const imageRequest = scanPack(book.id, pack).then(async bytes => {
-    if (version !== renderVersion) return;
-    scanUrl = URL.createObjectURL(new Blob([bytes.slice(start, start + length)], { type: 'image/webp' }));
-    ui.scan.src = scanUrl;
-    ui.scan.alt = scanLabel;
-    await ui.scan.decode();
+  const pagePath = `data/${book.id}-p${page.page}`;
+  ui.scan.src = `${pagePath}.webp`;
+  ui.scan.alt = scanLabel;
+  const imageRequest = ui.scan.decode().then(() => {
     if (version !== renderVersion) return;
     ui.scan.hidden = false;
     ui['scan-status'].hidden = true;
@@ -139,7 +127,7 @@ async function render({ link = true, replace = false } = {}) {
   }).catch(() => {
     if (version === renderVersion) ui['scan-status'].textContent = 'The scan could not load. Reload to try again.';
   });
-  const outputRequest = page.sampled && load(`data/${book.id}-p${page.page}.json`, 'json')
+  const outputRequest = loadJSON(`${pagePath}.json`)
     .then(pair => {
       if (version !== renderVersion) return;
       outputs.forEach((output, index) => displayOutput(output, pair[index], lang));
@@ -153,7 +141,7 @@ async function render({ link = true, replace = false } = {}) {
 
 function setPages(requested, options) {
   const book = books.find(item => item.id === ui.book.value);
-  available = ui.filter.value === 'sampled' ? book.pages.filter(page => page.sampled) : book.pages;
+  available = book.pages;
   ui.page.replaceChildren(...available.map(({ page }) => new Option(String(page), page)));
   const index = requested ? available.findIndex(page => page.page >= requested) :
     available.findIndex(page => page.outputs === 2);
@@ -164,13 +152,11 @@ function setPages(requested, options) {
 function restore(options) {
   const params = new URLSearchParams(location.search);
   ui.book.value = books.some(book => book.id === params.get('book')) ? params.get('book') : books[0].id;
-  ui.filter.value = params.get('show') === 'results' ? 'sampled' : 'all';
   const requested = Number(params.get('page'));
   return setPages(Number.isInteger(requested) && requested > 0 ? requested : 0, options);
 }
 
 ui.book.addEventListener('change', () => setPages());
-ui.filter.addEventListener('change', () => setPages(Number(ui.page.value)));
 ui.page.addEventListener('change', () => render());
 for (const [button, step] of [[ui.prev, -1], [ui.next, 1]]) {
   button.addEventListener('click', () => {
@@ -195,7 +181,7 @@ for (const button of views) {
 ui.zoom.addEventListener('click', () => {
   ui['enlarged-title'].textContent = ui.scan.alt;
   ui['large-scan'].alt = ui.scan.alt;
-  ui['large-scan'].src = scanUrl;
+  ui['large-scan'].src = ui.scan.src;
   ui.enlarged.showModal();
 });
 ui.magnify.addEventListener('click', () => {
@@ -210,12 +196,12 @@ ui.enlarged.addEventListener('close', () => {
 
 async function init() {
   try {
-    books = await load('data/books.json', 'json');
+    books = await loadJSON('data/books.json');
     ui.total.textContent = books.reduce((sum, book) => sum + book.pages.length, 0);
     ui.paired.textContent = books.reduce((sum, book) => sum + book.pages.filter(page => page.outputs === 2).length, 0);
     ui.book.replaceChildren(...books.map(({ id }) =>
       new Option(`${labels[id].name} · ${labels[id].language}`, id)));
-    for (const field of [ui.book, ui.filter, ui.page]) field.disabled = false;
+    for (const field of [ui.book, ui.page]) field.disabled = false;
     restore({ replace: true });
   } catch {
     ui['page-title'].textContent = 'Page browser';
